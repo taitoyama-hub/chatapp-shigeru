@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase_version9_RealtimeDB(G'sACADEMY初学者用サンプル)</title>
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <h1>チャットアプリ</h1>
+    <!-- コンテンツ表示画面 -->
+    <div class="container">
+        <!-- 左側：入力欄 -->
+        <div class="input-section">
+            <input type="text" id="uname" placeholder="名前を入力してください">
+            <textarea id="text" placeholder="文章を入力してください"></textarea>
+            <div class="button-group">
+                <button id="send">送信</button>
+                <button id="clear">全削除</button>
+            </div>
+        </div>
+        <!-- 右側：表示欄 -->
+        <div class="output-section">
+            <div id="output"></div>
+        </div>
+    </div>
+
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
+        import { getDatabase, ref, push, set, onChildAdded, remove, onChildRemoved }
+            from "https://www.gstatic.com/firebasejs/9.1.0/firebase-database.js";
+        // Your web app's Firebase configuration
+        // TODO: Firebaseの設定情報をここに追加してください
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            databaseURL: "YOUR_DATABASE_URL",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app); //RealtimeDBに接続
+        const dbRef = ref(db, "chat"); //RealtimeDB内の"chat"を使う
+
+        //データ登録(Click)
+        $("#send").on("click", function () {
+            const uname = $("#uname").val();
+            const text = $("#text").val();
+            // alert(uname + text); //取得確認
+            const msg = {
+                uname: uname,
+                text: text,
+                timestamp: new Date().toISOString(),
+            }
+
+            const newPostRef = push(dbRef);
+            set(newPostRef, msg);
+
+            // 空欄にするテクニック
+            $("#uname").val("");
+            $("#text").val("");
+
+            // シゲルからの自動返信を追加（1秒後）
+            setTimeout(function () {
+                const shigeruReplies = ["いいんちゃう", "しらんけど", "これみとき"];
+                const randomReply = shigeruReplies[Math.floor(Math.random() * shigeruReplies.length)];
+
+                let replyText = randomReply;
+                if (randomReply === "これみとき") {
+                    replyText = "これみとき https://ja.wikipedia.org/wiki/%E3%82%AA%E3%83%BC%E3%82%AD%E3%83%89%E3%83%BB%E3%82%B7%E3%82%B2%E3%83%AB";
+                }
+
+                const replyMsg = {
+                    uname: "シゲル",
+                    text: replyText,
+                    timestamp: new Date().toISOString(),
+                }
+                const replyRef = push(dbRef);
+                set(replyRef, replyMsg);
+            }, 1000);
+            // この下は消さない
+        })
+
+        //データ登録(Enter)
+
+
+        //全データ削除
+        $("#clear").on("click", function () {
+            if (confirm("全てのデータを削除しますか？")) {
+                remove(dbRef);
+                $("#output").empty(); // 画面からも削除
+            }
+        });
+
+        //最初にデータ取得＆onSnapshotでリアルタイムにデータを取得
+        onChildAdded(dbRef, function (data) {
+            const msg = data.val();
+            const key = data.key;
+
+            // シゲルのメッセージかどうかで判定
+            const isShigeru = msg.uname === "シゲル";
+
+            const date = new Date(msg.timestamp);
+            const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+            // URLが含まれている場合はリンクに変換
+            let messageText = msg.text;
+            const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[^\s]+\.[a-z]{2,}[^\s]*)/gi;
+            messageText = messageText.replace(urlRegex, function (url) {
+                // http://またはhttps://で始まらない場合は追加
+                let href = url;
+                if (!url.match(/^https?:\/\//i)) {
+                    href = 'http://' + url;
+                }
+                return `<a href="${href}" target="_blank" class="message-link">${url}</a>`;
+            });
+
+            let html = `
+            <div class="message ${isShigeru ? 'message-right' : 'message-left'}">
+                <div class="message-content">
+                    <div class="message-bubble ${isShigeru ? 'bubble-right' : 'bubble-left'}">
+                        <p class="message-text">${messageText}</p>
+                    </div>
+                    <p class="message-info">${msg.uname} - ${formattedDate}</p>
+                </div>
+            </div>
+            `
+            $("#output").append(html);
+            // 新しいメッセージが追加されたら自動的に下にスクロール
+            $("#output").scrollTop($("#output")[0].scrollHeight);
+            // この下は消さない
+        });
+
+        //データ削除時のリアルタイム更新
+        onChildRemoved(dbRef, function (data) {
+            $("#output").empty(); // 画面をクリアして再描画
+        });
+
+    </script>
+</body>
+
+</html>
+
